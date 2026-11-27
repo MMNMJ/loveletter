@@ -65,12 +65,33 @@
     }
     return out.trim()+(directive?'\n':'');
   }
+  // 교정된 언어: NFC(맥 자모 분리 방지), 줄바꿈 LF, 줄 끝 공백 제거, 탭→공백, 연속 공백·빈 줄 정리. 글자 자체는 바꾸지 않는다.
+  function normalizeText(text) {
+    return String(text).normalize('NFC').replace(/\r\n?/g,'\n').replace(/\t/g,' ').replace(/[\u200B\uFEFF]/g,'').replace(/ {2,}/g,' ').replace(/ +\n/g,'\n').replace(/\n +/g,'\n').replace(/\n{3,}/g,'\n\n').trim();
+  }
   function ascii(text) {
     if(!text.length)throw Error('변환할 코드가 없습니다.');
     if(text.length>200000)throw Error('입력은 200,000자 이하로 나누어 주세요.');
     for(let i=0;i<text.length;i++)if(text.charCodeAt(i)>127){const prefix=text.slice(0,i);throw Error(`7-bit ASCII에 없는 문자 ${JSON.stringify(String.fromCodePoint(text.codePointAt(i)))}가 있습니다 (${prefix.split('\n').length}행). 주석은 교정으로 제거할 수 있지만 문자열·식별자는 직접 확인하세요.`);}
     return Array.from(text,c=>c.charCodeAt(0).toString(2).padStart(7,'0')).join('');
   }
+  // ASCII-only text keeps the original 7-bit path. Any other character switches the whole text to UTF-8 bytes (8 bits per column).
+  function encode(text) {
+    if(!text.length)throw Error('변환할 글이 없습니다.');
+    if(text.length>200000)throw Error('입력은 200,000자 이하로 나누어 주세요.');
+    let isAscii=true;for(let i=0;i<text.length;i++)if(text.charCodeAt(i)>127){isAscii=false;break;}
+    if(isAscii)return {encoding:'ascii',bitWidth:7,units:characterTable(text)};
+    const encoder=new TextEncoder(),units=[];let charIndex=0;
+    for(const character of text) {
+      const cp=character.codePointAt(0);
+      if(cp>=0xD800&&cp<=0xDFFF)throw Error(`${charIndex+1}번째 문자가 깨진 유니코드입니다. 다시 입력해 주세요.`);
+      const bytes=encoder.encode(character);
+      bytes.forEach((b,k)=>units.push({index:units.length,charIndex,character,byte:k,byteCount:bytes.length,decimal:b,binary:b.toString(2).padStart(8,'0')}));
+      charIndex++;
+    }
+    return {encoding:'utf-8',bitWidth:8,units};
+  }
+  function unitTable(text){return encode(text).units;}
   function layout(text,options={}) {
     const p={...defaults,...options};
     const keys=['width','height','top','bottom','left','right','diameter','stroke'];
@@ -90,7 +111,7 @@
     if(p.stroke>=p.diameter)throw Error('선 두께는 타공 크기보다 작아야 합니다.');
     if(!/^#[0-9a-fA-F]{6}$/.test(p.color))throw Error('선 색상은 RGB 6자리 HEX 값이어야 합니다.');
 
-    const allBits=ascii(text),w=p.width-p.left-p.right,h=p.height-p.top-p.bottom,outer=p.diameter+p.stroke;
+    const enc=encode(text),bw=enc.bitWidth,units=enc.units,allBits=units.map(u=>u.binary).join(''),w=p.width-p.left-p.right,h=p.height-p.top-p.bottom,outer=p.diameter+p.stroke;
     let cols,maxRows,capacityPerPage,columnPitch,rowPitch;
 
     if(p.layoutMode==='continuous') {
@@ -110,51 +131,52 @@
 
       const lastSafeCenter=p.height-p.bottom-half;
       const centerSpan=lastSafeCenter-p.top;
-      if(centerSpan<6*outer-1e-9)throw Error('현재 판형과 여백에는 7개의 타공 행을 배치할 공간이 없습니다.');
+      if(centerSpan<(bw-1)*outer-1e-9)throw Error(`현재 판형과 여백에는 ${bw}개의 타공 행을 배치할 공간이 없습니다.`);
 
       if(p.rowSpacing==='manual') {
         rowPitch=p.rowPitch;
         if(rowPitch<=0)throw Error('행 중심 간격은 0보다 커야 합니다.');
         if(rowPitch+1e-9<outer)throw Error('행 중심 간격은 타공 크기 + 선 두께 이상이어야 합니다.');
         const maxBitRows=Math.floor((centerSpan+1e-9)/rowPitch)+1;
-        maxRows=Math.floor(maxBitRows/7);
+        maxRows=Math.floor(maxBitRows/bw);
       } else {
         const minAutoPitch=outer+0.2;const maxBitRows=Math.floor((centerSpan+1e-9)/minAutoPitch)+1;
-        maxRows=Math.floor(maxBitRows/7);
+        maxRows=Math.floor(maxBitRows/bw);
       }
-      if(maxRows<1)throw Error('현재 판형과 여백에는 7개의 타공 행을 배치할 공간이 없습니다.');
-      capacityPerPage=maxRows*cols*7;
+      if(maxRows<1)throw Error(`현재 판형과 여백에는 ${bw}개의 타공 행을 배치할 공간이 없습니다.`);
+      capacityPerPage=maxRows*cols*bw;
     }
 
     const pages=[];
     if(p.layoutMode==='column') {
       const charsPerPage=maxRows*cols;
       const half=outer/2,lastSafeCenter=p.height-p.bottom-half,centerSpan=lastSafeCenter-p.top;
-      for(let startChar=0,pageIndex=0;startChar<text.length;startChar+=charsPerPage,pageIndex++) {
-        const pageText=text.slice(startChar,startChar+charsPerPage);
-        const rows=Math.ceil(pageText.length/cols);
-        const bitRows=rows*7;
+      for(let startChar=0,pageIndex=0;startChar<units.length;startChar+=charsPerPage,pageIndex++) {
+        const pageUnits=units.slice(startChar,startChar+charsPerPage);
+        const pageText=bw===7?text.slice(startChar,startChar+charsPerPage):pageUnits.filter((u,k)=>u.byte===0||k===0).map(u=>u.character).join('');
+        const rows=Math.ceil(pageUnits.length/cols);
+        const bitRows=rows*bw;
         const pageRowPitch=p.rowSpacing==='auto'?(bitRows>1?centerSpan/(bitRows-1):0):p.rowPitch;
         if(bitRows>1&&pageRowPitch+1e-9<outer)throw Error('자동 행 간격이 타공 크기보다 작습니다. 판형을 키우거나 문자 열 수를 늘리세요.');
-        const page={p,text:pageText,bits:ascii(pageText),holes:[],cols,rows,bitRows,maxRows,capacity:capacityPerPage,columnPitch,rowPitch:pageRowPitch,startCharacter:startChar,startBit:startChar*7,pageIndex};
-        page.characters=characterTable(pageText);
-        for(const character of page.characters)for(let bitIndex=0;bitIndex<7;bitIndex++)if(character.binary[bitIndex]==='1')page.holes.push(columnPosition(page,character.index,bitIndex));
+        const page={p,text:pageText,bits:pageUnits.map(u=>u.binary).join(''),holes:[],cols,rows,bitRows,maxRows,capacity:capacityPerPage,columnPitch,rowPitch:pageRowPitch,startCharacter:startChar,startBit:startChar*bw,pageIndex,bitWidth:bw,encoding:enc.encoding,unitCount:pageUnits.length};
+        page.characters=bw===7?characterTable(pageText):pageUnits.map((u,k)=>({...u,index:k}));
+        for(const character of page.characters)for(let bitIndex=0;bitIndex<bw;bitIndex++)if(character.binary[bitIndex]==='1')page.holes.push(columnPosition(page,character.index,bitIndex));
         validateColumns(page);
         pages.push(page);
       }
     } else {
       for(let startBit=0,pageIndex=0;startBit<allBits.length;startBit+=capacityPerPage,pageIndex++) {
         const pageBits=allBits.slice(startBit,startBit+capacityPerPage),rows=Math.ceil(pageBits.length/cols);
-        const page={p,text:'',bits:pageBits,holes:[],cols,rows,maxRows,capacity:capacityPerPage,startBit,pageIndex};
+        const page={p,text:'',bits:pageBits,holes:[],cols,rows,maxRows,capacity:capacityPerPage,startBit,pageIndex,bitWidth:bw,encoding:enc.encoding};
         for(let i=0;i<pageBits.length;i++)if(pageBits[i]==='1')page.holes.push(position(page,i));
         pages.push(page);
       }
     }
-    if(!pages.length)throw Error('변환할 코드가 없습니다.');
+    if(!pages.length)throw Error('변환할 글이 없습니다.');
     const pageCount=pages.length;
     for(const page of pages)page.pageCount=pageCount;
     const first=pages[0];
-    return {...first,p,text,bits:allBits,pages,pageCount,characters:characterTable(text),
+    return {...first,p,text,bits:allBits,pages,pageCount,characters:units,bitWidth:bw,encoding:enc.encoding,unitCount:units.length,
       holes:pages.flatMap(page=>page.holes.map(h=>({...h,page:page.pageIndex}))),
       capacity:capacityPerPage,totalCapacity:capacityPerPage*pageCount};
   }
@@ -162,15 +184,15 @@
   function position(r,i) {
     if(r.pages) {
       if(r.p.layoutMode==='column') {
-        const charIndex=Math.floor(i/7),charsPerPage=r.pages[0].maxRows*r.p.charactersPerRow,pageIndex=Math.floor(charIndex/charsPerPage);
+        const bw=r.bitWidth||7,charIndex=Math.floor(i/bw),charsPerPage=r.pages[0].maxRows*r.p.charactersPerRow,pageIndex=Math.floor(charIndex/charsPerPage);
         const page=r.pages[Math.min(pageIndex,r.pages.length-1)],localChar=charIndex-page.pageIndex*charsPerPage;
-        return columnPosition(page,localChar,i%7);
+        return columnPosition(page,localChar,i%bw);
       }
       const pageIndex=Math.floor(i/r.capacity),page=r.pages[Math.min(pageIndex,r.pages.length-1)];
       return position(page,i-page.startBit);
     }
     const p=r.p,half=(p.diameter+p.stroke)/2;
-    if(p.layoutMode==='column')return columnPosition(r,Math.floor(i/7),i%7);
+    if(p.layoutMode==='column'){const bw=r.bitWidth||7;return columnPosition(r,Math.floor(i/bw),i%bw);}
     return {x:p.left+half+(i%r.cols)*(p.diameter+p.gap),y:p.top+half+Math.floor(i/r.cols)*(p.diameter+p.rowGap)};
   }
   function characterTable(text) {
@@ -183,17 +205,18 @@
       return columnPosition(page,charIndex-pageIndex*charsPerPage,bitIndex);
     }
     const p=r.p,column=charIndex%p.charactersPerRow,rowGroup=Math.floor(charIndex/p.charactersPerRow);
-    return {x:p.left+r.columnPitch/2+column*r.columnPitch,y:p.top+(rowGroup*7+bitIndex)*r.rowPitch};
+    return {x:p.left+r.columnPitch/2+column*r.columnPitch,y:p.top+(rowGroup*(r.bitWidth||7)+bitIndex)*r.rowPitch};
   }
   function validateColumns(r) {
-    if(r.pages){for(const page of r.pages)validateColumns(page);return true;}
+    if(r.pages){if(r.characters&&r.characters.map(u=>u.binary).join('')!==r.bits)throw Error('문자 디버그 테이블 불일치: 출력을 중단했습니다.');for(const page of r.pages)validateColumns(page);return true;}
     if(r.p.layoutMode!=='column')return true;
-    let holeIndex=0;const p=r.p;
-    for(let charIndex=0;charIndex<r.text.length;charIndex++) {
-      const decimal=r.text.charCodeAt(charIndex),entry=r.characters[charIndex];
-      if(!entry||entry.index!==charIndex||entry.character!==r.text[charIndex]||entry.decimal!==decimal||entry.binary!==decimal.toString(2).padStart(7,'0'))throw Error('문자 디버그 테이블 불일치: 출력을 중단했습니다.');
-      for(let bitIndex=0;bitIndex<7;bitIndex++)if((decimal>>(6-bitIndex))&1) {
-        const h=r.holes[holeIndex++],expectedX=p.left+(charIndex%p.charactersPerRow+.5)*r.columnPitch,expectedY=p.top+(Math.floor(charIndex/p.charactersPerRow)*7+bitIndex)*r.rowPitch;
+    let holeIndex=0;const p=r.p,bw=r.bitWidth||7,count=bw===7?r.text.length:r.characters.length;
+    if(r.characters.length!==count)throw Error('문자 디버그 테이블 불일치: 출력을 중단했습니다.');
+    for(let charIndex=0;charIndex<count;charIndex++) {
+      const entry=r.characters[charIndex],decimal=bw===7?r.text.charCodeAt(charIndex):entry&&entry.decimal;
+      if(!entry||entry.index!==charIndex||(bw===7&&entry.character!==r.text[charIndex])||entry.decimal!==decimal||!(decimal>=0&&decimal<2**bw)||entry.binary!==decimal.toString(2).padStart(bw,'0'))throw Error('문자 디버그 테이블 불일치: 출력을 중단했습니다.');
+      for(let bitIndex=0;bitIndex<bw;bitIndex++)if((decimal>>(bw-1-bitIndex))&1) {
+        const h=r.holes[holeIndex++],expectedX=p.left+(charIndex%p.charactersPerRow+.5)*r.columnPitch,expectedY=p.top+(Math.floor(charIndex/p.charactersPerRow)*bw+bitIndex)*r.rowPitch;
         if(!h||Math.abs(h.x-expectedX)>1e-8||Math.abs(h.y-expectedY)>1e-8)throw Error(`문자 ${charIndex}의 세로열 좌표 불일치: 출력을 중단했습니다.`);
       }
     }
@@ -214,8 +237,8 @@
     if(x1<0||x2>p.width)throw Error('구분선이 판형의 좌우 경계를 벗어납니다. 길이 또는 가로 이동을 조정하세요.');
     const lines=[];
     for(let group=0;group<r.rows;group++) {
-      const lastRowY=p.top+(group*7+6)*r.rowPitch;
-      const nextRowY=group+1<r.rows?p.top+(group+1)*7*r.rowPitch:null;
+      const bw=r.bitWidth||7,lastRowY=p.top+(group*bw+bw-1)*r.rowPitch;
+      const nextRowY=group+1<r.rows?p.top+(group+1)*bw*r.rowPitch:null;
       const y=(nextRowY===null?lastRowY+halfHole+2:(lastRowY+nextRowY)/2)+settings.offsetY;
       if(y-halfLine<0||y+halfLine>p.height)throw Error(`${group+1}번 구분선이 판형의 위아래 경계를 벗어납니다.`);
       if(y-halfLine<=lastRowY+halfHole+1e-9||(nextRowY!==null&&y+halfLine>=nextRowY-halfHole-1e-9))throw Error(`${group+1}번 구분선이 타공 행과 겹치거나 간격이 부족합니다. 구분선 두께·세로 이동을 조정하거나 구분선을 끄세요.`);
@@ -338,6 +361,6 @@
     for(const offset of offsets.slice(1))out+=`${String(offset).padStart(10,'0')} 00000 n \n`;
     out+=`trailer\n<< /Size ${objects.length+1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;return out;
   }
-  const api={defaults,minify,ascii,layout,position,columnPosition,characterTable,validateColumns,separators,svg,pdf,lex,customScale,customPathPdf};
+  const api={defaults,minify,normalizeText,ascii,encode,unitTable,layout,position,columnPosition,characterTable,validateColumns,separators,svg,pdf,lex,customScale,customPathPdf};
   if(typeof module!=='undefined')module.exports=api;else root.Bouchon=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

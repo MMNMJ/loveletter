@@ -1,7 +1,7 @@
 'use strict';
 const $=id=>document.getElementById(id),B=Bouchon;
 let result=null,params={...B.defaults},debugRows=[],debugOffset=0,separatorLayout=null,previewPage=0,exportPreviewPage=0,customVector=null;
-const example='#include <Servo.h>\n\nServo s;\n\nvoid setup() {\n  s.attach(9);\n}\n\nvoid loop() {\n  s.write(180);\n  delay(1000);\n  s.write(0);\n  delay(1000);\n}\n';
+const example='당신을 환영합니다.\nWelcome to Min-Basile Bouchon.\n돌봄은 구멍 난 자리를 다시 잇는 일.';
 
 const SVG_NS='http://www.w3.org/2000/svg';
 const matI=()=>[1,0,0,1,0,0];
@@ -97,11 +97,11 @@ async function loadCustomVectorFile(file){
 }
 $('source').value=example;
 function status(message,error=false){$('status').textContent=message;$('status').classList.toggle('error',error);}
-function invalidate(){result=null;previewPage=0;debugRows=[];debugOffset=0;renderDebug();$('columnCheck').textContent='';$('export').disabled=true;$('stats').replaceChildren();$('pitchInfo').textContent='';$('bits').textContent='변환 후 표시됩니다.';$('preview').replaceChildren();const p=document.createElement('p');p.textContent='코드가 변경되었습니다. 다시 변환하세요.';$('preview').append(p);}
-$('source').addEventListener('input',()=>{invalidate();$('corrected').value='';status('원본이 변경되었습니다. 다시 교정·변환하세요.');});
-function correct(){const text=B.minify($('source').value);$('corrected').value=text;debugRows=B.characterTable(text);debugOffset=0;renderDebug();return text;}
-$('correct').onclick=()=>{invalidate();try{const text=correct();status(`교정 완료 · ${$('source').value.length} → ${text.length}자\n실제 실행 여부는 Arduino IDE에서 컴파일해 확인하세요.`);}catch(e){$('corrected').value='';status(e.message,true);}};
-$('example').onclick=()=>{if($('source').value!==example&&!confirm('현재 입력을 예제 코드로 바꿀까요?'))return;$('source').value=example;$('corrected').value='';invalidate();status('서보 예제를 불러왔습니다.');};
+function invalidate(){result=null;previewPage=0;debugRows=[];debugOffset=0;renderDebug();$('columnCheck').textContent='';$('export').disabled=true;$('stats').replaceChildren();$('pitchInfo').textContent='';$('bits').textContent='변환 후 표시됩니다.';$('preview').replaceChildren();const p=document.createElement('p');p.textContent='글이 바뀌었어요. 다시 변환해 주세요.';$('preview').append(p);}
+$('source').addEventListener('input',()=>{invalidate();$('corrected').value='';status('원문이 바뀌었어요. 다시 교정·변환해 주세요.');});
+function correct(){const text=B.normalizeText($('source').value);$('corrected').value=text;debugRows=B.unitTable(text);debugOffset=0;renderDebug();return text;}
+$('correct').onclick=()=>{invalidate();try{const text=correct();status(`교정 완료 · ${[...$('source').value].length} → ${[...text].length}자 · ${debugRows.length}칸\n${debugRows[0]&&debugRows[0].binary.length===8?'한글 등이 있어 UTF-8 · 8-bit로 바꿔요.':'영어만 있어 7-bit ASCII로 바꿔요.'}`);}catch(e){$('corrected').value='';status(e.message,true);}};
+$('example').onclick=()=>{if($('source').value!==example&&!confirm('지금 쓴 글을 예제로 바꿀까요?'))return;$('source').value=example;$('corrected').value='';invalidate();status('예제 문장을 불러왔어요.');};
 function formParams(){const f=$('settingsForm');return Object.fromEntries(Object.keys(B.defaults).map(k=>[k,typeof B.defaults[k]==='string'?f.elements[k].value:Number(f.elements[k].value)]));}
 function syncPresets(){const f=$('settingsForm');const board=f.elements.width.value+','+f.elements.height.value;$('preset').value=['300,450','300,400','600,450'].includes(board)?board:'custom';const ms=['top','bottom','left','right'].map(k=>f.elements[k].value);$('marginPreset').value=ms.every(v=>v===ms[0])&&['10','20','40'].includes(ms[0])?ms[0]:'custom';}
 function syncFields(){const f=$('settingsForm'),column=f.elements.layoutMode.value==='column';$('columnFields').hidden=!column;for(const n of $('columnFields').querySelectorAll('input,select'))n.disabled=!column;f.elements.columnPitch.disabled=!column||f.elements.columnSpacing.value==='auto';f.elements.rowPitch.disabled=!column||f.elements.rowSpacing.value==='auto';for(const label of document.querySelectorAll('.continuousField')){label.hidden=column;label.querySelector('input').disabled=column;}}
@@ -125,7 +125,7 @@ function marginPreview(){
  }
  host.replaceChildren(svg);
 }
-$('convert').onclick=()=>{try{correct();B.ascii($('corrected').value);for(const [k,v]of Object.entries(params))$('settingsForm').elements[k].value=v;$('settingError').textContent='';syncFields();syncPresets();syncCustomVectorControls();marginPreview();$('settings').showModal();}catch(e){invalidate();status(e.message,true);}};
+$('convert').onclick=()=>{try{correct();B.encode($('corrected').value);for(const [k,v]of Object.entries(params))$('settingsForm').elements[k].value=v;$('settingError').textContent='';syncFields();syncPresets();syncCustomVectorControls();marginPreview();$('settings').showModal();}catch(e){invalidate();status(e.message,true);}};
 $('cancel').onclick=()=>$('settings').close();
 $('preset').onchange=e=>{if(e.target.value!=='custom'){const [w,h]=e.target.value.split(',');$('settingsForm').elements.width.value=w;$('settingsForm').elements.height.value=h;marginPreview();}};
 $('marginPreset').onchange=e=>{if(e.target.value!=='custom'){for(const k of ['top','bottom','left','right'])$('settingsForm').elements[k].value=e.target.value;marginPreview();}};
@@ -151,23 +151,26 @@ function shapeElement(el,h,p,style={}) {
  if(p.shape==='triangle')return el('path',{d:`M ${h.x} ${h.y-r} L ${h.x+r} ${h.y+r} L ${h.x-r} ${h.y+r} Z`,...common});
  return el('path',{d:`M ${h.x} ${h.y+r*.95} C ${h.x-r*.95} ${h.y+r*.25} ${h.x-r*.9} ${h.y-r*.65} ${h.x-r*.42} ${h.y-r*.65} C ${h.x-r*.14} ${h.y-r*.65} ${h.x} ${h.y-r*.42} ${h.x} ${h.y-r*.2} C ${h.x} ${h.y-r*.42} ${h.x+r*.14} ${h.y-r*.65} ${h.x+r*.42} ${h.y-r*.65} C ${h.x+r*.9} ${h.y-r*.65} ${h.x+r*.95} ${h.y+r*.25} ${h.x} ${h.y+r*.95} Z`,...common});
 }
-function render(){if(!result)return;B.validateColumns(result);debugRows=result.characters;renderDebug();$('columnCheck').textContent=result.p.layoutMode==='column'?'검증 통과 · 문자별 ASCII와 모든 타공 세로열 좌표가 일치합니다.':'연속 배치 모드 · 문자 세로열 검증은 적용하지 않습니다.';$('activeMode').textContent='현재 모드: '+(result.p.layoutMode==='column'?'7-bit Column Layout':'Continuous Bit Layout');
+function render(){if(!result)return;B.validateColumns(result);debugRows=result.characters;renderDebug();$('columnCheck').textContent=result.p.layoutMode==='column'?`검증 통과 · 문자별 ${result.encoding==='utf-8'?'UTF-8 바이트':'ASCII'}와 모든 타공 세로열 좌표가 일치합니다.`:'연속 배치 모드 · 문자 세로열 검증은 적용하지 않습니다.';$('activeMode').textContent='현재 모드: '+(result.p.layoutMode==='column'?`${result.bitWidth}-bit Column Layout · ${result.encoding==='utf-8'?'UTF-8':'ASCII'}`:`Continuous Bit Layout · ${result.encoding==='utf-8'?'UTF-8':'ASCII'}`);
  const page=result.pages[previewPage]||result.pages[0],{p,bits,cols}=page,holes=page.holes;
  const ns='http://www.w3.org/2000/svg';const svg=document.createElementNS(ns,'svg');svg.setAttribute('viewBox',`0 0 ${p.width} ${p.height}`);svg.setAttribute('aria-label',`타공 패턴 미리보기 ${previewPage+1}페이지`);
  const el=(tag,attrs)=>{const n=document.createElementNS(ns,tag);for(const [k,v]of Object.entries(attrs))n.setAttribute(k,v);svg.append(n);return n;};
  el('rect',{width:p.width,height:p.height,fill:'white'});
  if($('margins').checked){el('rect',{width:p.width,height:p.height,fill:'#efefef'});el('rect',{x:p.left,y:p.top,width:p.width-p.left-p.right,height:p.height-p.top-p.bottom,fill:'white',stroke:'#000','stroke-width':.3,'stroke-dasharray':'2 2'});}
+ if($('grid').checked){const g={stroke:'#000','stroke-width':.12,'stroke-opacity':.35};
+   if(p.layoutMode==='column'){const bw=page.bitWidth||7,n=page.rows*bw,x0=p.left,x1=p.width-p.right;for(let c=0;c<cols;c++){const x=B.columnPosition(page,c,0).x;el('line',{x1:x,y1:p.top,x2:x,y2:p.top+Math.max(0,n-1)*page.rowPitch,...g});}for(let k=0;k<n;k++){const y=p.top+k*page.rowPitch;el('line',{x1:x0,y1:y,x2:x1,y2:y,...g,'stroke-width':k%bw===0?.3:.12});}}
+   else{const pitchX=p.diameter+p.gap,pitchY=p.diameter+p.rowGap,half=(p.diameter+p.stroke)/2;for(let c=0;c<cols;c++){const x=p.left+half+c*pitchX;el('line',{x1:x,y1:p.top,x2:x,y2:p.height-p.bottom,...g});}for(let k=0;k<page.rows;k++){const y=p.top+half+k*pitchY;el('line',{x1:p.left,y1:y,x2:p.width-p.right,y2:y,...g});}}}
  if($('zero').checked)for(let i=0;i<bits.length;i++)if(bits[i]==='0'){const point=B.position(page,i);shapeElement(el,point,p,{stroke:'#c4c4c4',strokeWidth:.15});}
  for(const h of holes)shapeElement(el,h,p);
  $('preview').replaceChildren(svg);
  $('pageNav').hidden=result.pageCount<=1;$('pageLabel').textContent=`${previewPage+1} / ${result.pageCount} 페이지`;$('pagePrev').disabled=previewPage===0;$('pageNext').disabled=previewPage>=result.pageCount-1;
- $('stats').replaceChildren();for(const [label,value]of [['Characters',result.text.length],['ASCII bits',result.bits.length],['Holes',result.holes.length],['Pages',result.pageCount],['현재 페이지 문자/비트',p.layoutMode==='column'?`${page.text.length} / ${page.bits.length}`:`— / ${page.bits.length}`],['Board · mm',`${p.width} × ${p.height}`],[p.layoutMode==='column'?'문자 줄 × 문자 열':'Rows × Columns',`${page.rows} × ${cols}`],['Margin · 위/아래/좌/우',`${p.top} / ${p.bottom} / ${p.left} / ${p.right}`]]){const d=document.createElement('div');d.className='stat';const sm=document.createElement('small');sm.textContent=label;const v=document.createElement('strong');v.textContent=value;d.append(sm,v);$('stats').append(d);}
- $('layoutNote').textContent=p.layoutMode==='column'?`7-bit Column Layout · 상위 비트부터 위 → 아래로 배치하되 모든 타공 행의 중심 간격은 동일합니다. ${p.charactersPerRow}문자마다 다음 문자 줄로 이어지고, 7행마다 SVG 구분선을 넣을 수 있습니다.`:'Continuous Bit Layout · 왼쪽 → 오른쪽, 위 → 아래로 연속 배치하며, 판을 넘으면 다음 페이지가 자동 생성됩니다.';
- $('pitchInfo').textContent=spacingInfo(page);$('bits').textContent=result.bits.match(/.{1,7}/g).slice(0,2000).join(' ')+(result.bits.length>14000?' … (미리보기는 2,000자까지)':'');
+ $('stats').replaceChildren();for(const [label,value]of [['Characters',[...result.text].length],[result.encoding==='utf-8'?'UTF-8 bytes':'ASCII chars',result.unitCount],['Bits',result.bits.length],['Holes',result.holes.length],['현재 페이지 칸/비트',p.layoutMode==='column'?`${page.characters.length} / ${page.bits.length}`:`— / ${page.bits.length}`],['Board · mm',`${p.width} × ${p.height}`],[p.layoutMode==='column'?'문자 줄 × 문자 열':'Rows × Columns',`${page.rows} × ${cols}`],['Margin · 위/아래/좌/우',`${p.top} / ${p.bottom} / ${p.left} / ${p.right}`],['Pages',result.pageCount]]){const d=document.createElement('div');d.className='stat';const sm=document.createElement('small');sm.textContent=label;const v=document.createElement('strong');v.textContent=value;d.append(sm,v);$('stats').append(d);}
+ $('layoutNote').textContent=p.layoutMode==='column'?`${result.bitWidth}-bit Column Layout · 한 칸(${result.encoding==='utf-8'?'UTF-8 1바이트':'ASCII 1문자'})의 비트를 위 → 아래로 놓아요. 행 간격은 모두 같아요. ${p.charactersPerRow}칸마다 다음 줄로 넘어가고, ${result.bitWidth}행마다 SVG 구분선을 넣을 수 있어요.`:'Continuous Bit Layout · 왼쪽 → 오른쪽, 위 → 아래로 연속 배치하며, 판을 넘으면 다음 페이지가 자동 생성됩니다.';
+ $('pitchInfo').textContent=spacingInfo(page);$('bits').textContent=result.bits.match(new RegExp(`.{1,${result.bitWidth}}`,'g')).slice(0,2000).join(' ')+(result.bits.length>2000*result.bitWidth?' … (미리보기는 2,000자까지)':'');
 }
 $('pagePrev').onclick=()=>{if(previewPage>0){previewPage--;render();}};
 $('pageNext').onclick=()=>{if(result&&previewPage<result.pageCount-1){previewPage++;render();}};
-$('zero').onchange=render;$('margins').onchange=render;
+$('zero').onchange=render;$('margins').onchange=render;$('grid').onchange=render;
 $('export').onclick=()=>{if(!result)return;try{B.validateColumns(result);}catch(e){invalidate();status(e.message,true);return;}$('exportError').textContent='';if(separatorLayout!==result){$('separatorLength').value=result.p.width-result.p.left-result.p.right;separatorLayout=result;}exportPreviewPage=Math.min(previewPage,result.pageCount-1);syncSeparatorControls();renderExportPreview();$('exportDialog').showModal();};
 $('exportCancel').onclick=()=>$('exportDialog').close();
 $('exportForm').onsubmit=e=>{e.preventDefault();if(!result)return;
@@ -177,15 +180,15 @@ $('exportForm').onsubmit=e=>{e.preventDefault();if(!result)return;
  try{const custom=result.p.shape==='custom'?customRenderData():null;payloads=[];if(formats.includes('pdf'))payloads.push({format:'pdf',data:B.pdf(result,custom),page:null});if(formats.includes('svg'))payloads.push({format:'svg',data:B.svg(result,separatorOptions(),custom),page:null});}
  catch(error){$('exportError').textContent=error.message;return;}
  const date=new Date(),pad=n=>String(n).padStart(2,'0');const stamp=`${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}_${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
- for(const {format,data,page} of payloads){const url=URL.createObjectURL(new Blob([data],{type:format==='svg'?'image/svg+xml;charset=utf-8':'application/pdf'}));const a=document.createElement('a');a.href=url;const suffix=format==='svg'&&result.pageCount>1?'_all-boards_layers':'';a.download=`Min_Basile_Bouchon_${stamp}_Arduino_ASCII_${result.p.width}x${result.p.height}_${result.p.layoutMode}_${result.p.shape}${suffix}.${format}`;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);}
+ for(const {format,data,page} of payloads){const url=URL.createObjectURL(new Blob([data],{type:format==='svg'?'image/svg+xml;charset=utf-8':'application/pdf'}));const a=document.createElement('a');a.href=url;const suffix=format==='svg'&&result.pageCount>1?'_all-boards_layers':'';a.download=`Min_Basile_Bouchon_${stamp}_Text_${result.encoding==='utf-8'?'UTF8':'ASCII'}_${result.p.width}x${result.p.height}_${result.p.layoutMode}_${result.p.shape}${suffix}.${format}`;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);}
  $('exportDialog').close();status(`${formats.join(' / ').toUpperCase()} 다운로드를 요청했습니다. SVG는 ${result.pageCount}개 판이 하나의 파일에 포함됩니다.`);
 };
 
 function renderDebug(){
  $('debugBody').replaceChildren();
  const display=c=>c===' '?'␠ (space)':c==='\n'?'\\n (LF)':c==='\t'?'\\t (TAB)':c==='\r'?'\\r (CR)':c.charCodeAt(0)<32||c.charCodeAt(0)===127?'U+'+c.charCodeAt(0).toString(16).padStart(4,'0'):c;
- for(const entry of debugRows.slice(debugOffset,debugOffset+100)){const tr=document.createElement('tr');for(const value of [entry.index,display(entry.character),entry.decimal,entry.binary]){const td=document.createElement('td');td.textContent=value;tr.append(td);}$('debugBody').append(tr);}
- $('debugPage').textContent=debugRows.length?`${debugOffset+1}–${Math.min(debugOffset+100,debugRows.length)} / ${debugRows.length}문자`:'교정 후 표시';
+ for(const entry of debugRows.slice(debugOffset,debugOffset+100)){const tr=document.createElement('tr');for(const value of [entry.index,display(entry.character)+(entry.byteCount>1?`  (${entry.byte+1}/${entry.byteCount})`:''),entry.decimal,entry.binary]){const td=document.createElement('td');td.textContent=value;tr.append(td);}$('debugBody').append(tr);}
+ $('debugPage').textContent=debugRows.length?`${debugOffset+1}–${Math.min(debugOffset+100,debugRows.length)} / ${debugRows.length}칸`:'교정 후 표시';
  $('debugPrev').disabled=debugOffset===0;$('debugNext').disabled=debugOffset+100>=debugRows.length;
 }
 $('debugPrev').onclick=()=>{debugOffset=Math.max(0,debugOffset-100);renderDebug();};
@@ -219,7 +222,7 @@ function syncSeparatorControls(){
  $('separatorControls').disabled=!available;
  for(const n of $('separatorControls').querySelectorAll('.fields input'))n.disabled=!available||!$('separatorEnabled').checked;
  $('exportError').textContent='';
- if(!available){$('separatorStatus').textContent='SVG 출력과 7-bit Column Layout을 선택하면 사용할 수 있습니다.';return;}
+ if(!available){$('separatorStatus').textContent='SVG 출력과 Column Layout을 선택하면 사용할 수 있습니다.';return;}
  try{const s=B.separators(result.pages[exportPreviewPage]||result.pages[0],separatorOptions());$('separatorStatus').textContent=s.lines.length?`SVG 구분선 ${s.lines.length}개 · 별도 편집 그룹으로 저장`:'구분선 OFF · 타공만 저장';}
  catch(error){$('separatorStatus').textContent=error.message;}
 }
