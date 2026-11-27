@@ -132,7 +132,7 @@ footer{margin:40px var(--pad) 0;padding:16px 0 28px;border-top:2px dashed #000;f
 /* 위에서 3mm 동그라미가 떨어져 바닥에 쌓인다. 마우스를 빠르게 움직이면 흩어졌다가 사라지고, 다시 처음부터 떨어진다. */
 const cv=document.getElementById('rain'),ctx=cv.getContext('2d');
 if(matchMedia('(prefers-reduced-motion: reduce)').matches){cv.remove();return;}
-const MM=96/25.4,R=1.5*MM,D=R*2,G=260,DRAG=1.85,MAXFILL=.15;let W,H,dpr,balls=[],state='fall',fade=1,spawnT=0,mouse={x:-1e4,y:-1e4,vx:0,vy:0,t:0};
+const MM=96/25.4,R=1.5*MM,D=R*2,G=1100,DRAG=.5,MAXFILL=.15;let W,H,dpr,balls=[],state='fall',fade=1,spawnT=0,mouse={x:-1e4,y:-1e4,vx:0,vy:0,t:0};
 function size(){dpr=devicePixelRatio||1;W=innerWidth;H=innerHeight;cv.width=W*dpr;cv.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);}
 size();addEventListener('resize',()=>{size();for(const b of balls){b.x=Math.min(Math.max(b.x,R),W-R);b.y=Math.min(b.y,H-R);}});
 const maxBalls=()=>Math.floor(W/D*(H*MAXFILL)/(D*.87));
