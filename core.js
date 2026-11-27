@@ -1,7 +1,7 @@
 /* LOVE LETTER (Min-Basile Bouchon) v0.6 — no dependencies. */
 (function (root) {
   'use strict';
-  const defaults = {width:300,height:450,top:28,bottom:30,left:26,right:26,diameter:3.2,gap:0.75,rowGap:0.75,stroke:0.01,color:'#ff0000',shape:'circle',layoutMode:'column',charactersPerRow:14,columnSpacing:'auto',columnPitch:17.7142857143,rowSpacing:'auto',rowPitch:3.95};
+  const defaults = {width:300,height:450,top:28,bottom:30,left:26,right:26,diameter:3.2,gap:0.75,rowGap:0.75,stroke:0.01,color:'#ff0000',shape:'circle',layoutMode:'column',charactersPerRow:14,columnSpacing:'auto',columnPitch:17.7142857143,rowSpacing:'auto',rowPitch:3.95,verticalAlign:'top'};
   const ops = ['%:%:','>>=','<<=','->*','...','##','::','.*','->','++','--','<<','>>','<=','>=','==','!=','&&','||','*=','/=','%=','+=','-=','&=','^=','|=','<:',':>','<%','%>','%:'];
   function lex(s) {
     const out=[]; let i=0;
@@ -101,6 +101,7 @@
     else {
       keys.push('charactersPerRow');
       for(const k of ['columnSpacing','rowSpacing'])if(!['auto','manual'].includes(p[k]))throw Error('간격 계산 방식을 선택하세요.');
+      if(!['top','center'].includes(p.verticalAlign))throw Error('세로 정렬 방식을 선택하세요.');
       if(p.columnSpacing==='manual')keys.push('columnPitch');
       if(p.rowSpacing==='manual')keys.push('rowPitch');
       if(!Number.isInteger(p.charactersPerRow)||p.charactersPerRow<1||p.charactersPerRow>10000)throw Error('Characters per row는 1~10,000 사이 정수여야 합니다.');
@@ -158,7 +159,9 @@
         const bitRows=rows*bw;
         const pageRowPitch=p.rowSpacing==='auto'?(bitRows>1?centerSpan/(bitRows-1):0):p.rowPitch;
         if(bitRows>1&&pageRowPitch+1e-9<outer)throw Error('자동 행 간격이 타공 크기보다 작습니다. 판형을 키우거나 문자 열 수를 늘리세요.');
-        const page={p,text:pageText,bits:pageUnits.map(u=>u.binary).join(''),holes:[],cols,rows,bitRows,maxRows,capacity:capacityPerPage,columnPitch,rowPitch:pageRowPitch,startCharacter:startChar,startBit:startChar*bw,pageIndex,bitWidth:bw,encoding:enc.encoding,unitCount:pageUnits.length};
+        // 세로 가운데 정렬(옵션): 남는 높이의 절반만큼 묶음 전체를 아래로 옮긴다. 기본 top이면 0.
+        const offsetY=p.verticalAlign==='center'?Math.max(0,(centerSpan-(bitRows-1)*pageRowPitch)/2):0;
+        const page={p,text:pageText,bits:pageUnits.map(u=>u.binary).join(''),holes:[],cols,rows,bitRows,maxRows,capacity:capacityPerPage,columnPitch,rowPitch:pageRowPitch,startCharacter:startChar,startBit:startChar*bw,pageIndex,offsetY,bitWidth:bw,encoding:enc.encoding,unitCount:pageUnits.length};
         page.characters=bw===7?characterTable(pageText):pageUnits.map((u,k)=>({...u,index:k}));
         for(const character of page.characters)for(let bitIndex=0;bitIndex<bw;bitIndex++)if(character.binary[bitIndex]==='1')page.holes.push(columnPosition(page,character.index,bitIndex));
         validateColumns(page);
@@ -205,7 +208,7 @@
       return columnPosition(page,charIndex-pageIndex*charsPerPage,bitIndex);
     }
     const p=r.p,column=charIndex%p.charactersPerRow,rowGroup=Math.floor(charIndex/p.charactersPerRow);
-    return {x:p.left+r.columnPitch/2+column*r.columnPitch,y:p.top+(rowGroup*(r.bitWidth||7)+bitIndex)*r.rowPitch};
+    return {x:p.left+r.columnPitch/2+column*r.columnPitch,y:p.top+(r.offsetY||0)+(rowGroup*(r.bitWidth||7)+bitIndex)*r.rowPitch};
   }
   function validateColumns(r) {
     if(r.pages){if(r.characters&&r.characters.map(u=>u.binary).join('')!==r.bits)throw Error('문자 디버그 테이블 불일치: 출력을 중단했습니다.');for(const page of r.pages)validateColumns(page);return true;}
@@ -216,7 +219,7 @@
       const entry=r.characters[charIndex],decimal=bw===7?r.text.charCodeAt(charIndex):entry&&entry.decimal;
       if(!entry||entry.index!==charIndex||(bw===7&&entry.character!==r.text[charIndex])||entry.decimal!==decimal||!(decimal>=0&&decimal<2**bw)||entry.binary!==decimal.toString(2).padStart(bw,'0'))throw Error('문자 디버그 테이블 불일치: 출력을 중단했습니다.');
       for(let bitIndex=0;bitIndex<bw;bitIndex++)if((decimal>>(bw-1-bitIndex))&1) {
-        const h=r.holes[holeIndex++],expectedX=p.left+(charIndex%p.charactersPerRow+.5)*r.columnPitch,expectedY=p.top+(Math.floor(charIndex/p.charactersPerRow)*bw+bitIndex)*r.rowPitch;
+        const h=r.holes[holeIndex++],expectedX=p.left+(charIndex%p.charactersPerRow+.5)*r.columnPitch,expectedY=p.top+(r.offsetY||0)+(Math.floor(charIndex/p.charactersPerRow)*bw+bitIndex)*r.rowPitch;
         if(!h||Math.abs(h.x-expectedX)>1e-8||Math.abs(h.y-expectedY)>1e-8)throw Error(`문자 ${charIndex}의 세로열 좌표 불일치: 출력을 중단했습니다.`);
       }
     }
@@ -237,8 +240,8 @@
     if(x1<0||x2>p.width)throw Error('구분선이 판형의 좌우 경계를 벗어납니다. 길이 또는 가로 이동을 조정하세요.');
     const lines=[];
     for(let group=0;group<r.rows;group++) {
-      const bw=r.bitWidth||7,lastRowY=p.top+(group*bw+bw-1)*r.rowPitch;
-      const nextRowY=group+1<r.rows?p.top+(group+1)*bw*r.rowPitch:null;
+      const bw=r.bitWidth||7,oy=r.offsetY||0,lastRowY=p.top+oy+(group*bw+bw-1)*r.rowPitch;
+      const nextRowY=group+1<r.rows?p.top+oy+(group+1)*bw*r.rowPitch:null;
       const y=(nextRowY===null?lastRowY+halfHole+2:(lastRowY+nextRowY)/2)+settings.offsetY;
       if(y-halfLine<0||y+halfLine>p.height)throw Error(`${group+1}번 구분선이 판형의 위아래 경계를 벗어납니다.`);
       if(y-halfLine<=lastRowY+halfHole+1e-9||(nextRowY!==null&&y+halfLine>=nextRowY-halfHole-1e-9))throw Error(`${group+1}번 구분선이 타공 행과 겹치거나 간격이 부족합니다. 구분선 두께·세로 이동을 조정하거나 구분선을 끄세요.`);
