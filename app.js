@@ -1,7 +1,7 @@
 'use strict';
 const $=id=>document.getElementById(id),B=Bouchon;
 let result=null,params={...B.defaults},debugRows=[],debugOffset=0,separatorLayout=null,previewPage=0,exportPreviewPage=0,customVector=null;
-const example='당신을 환영합니다.\nWelcome to Min-Basile Bouchon.\n돌봄은 구멍 난 자리를 다시 잇는 일.';
+const example='당신을 환영합니다.\nWelcome to LOVE LETTER.\n돌봄은 구멍 난 자리를 다시 잇는 일.';
 
 const SVG_NS='http://www.w3.org/2000/svg';
 const matI=()=>[1,0,0,1,0,0];
