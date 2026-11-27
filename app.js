@@ -113,8 +113,8 @@ function marginPreview(){
  const host=$('marginPreview'),ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg');
  svg.setAttribute('viewBox',`0 0 ${p.width} ${p.height}`);
  const el=(tag,attrs)=>{const n=document.createElementNS(ns,tag);for(const [k,v]of Object.entries(attrs))n.setAttribute(k,v);svg.append(n);return n;};
- el('rect',{width:p.width,height:p.height,fill:'#d8e2d2',stroke:'#4a6250','stroke-width':1});
- el('rect',{x:p.left,y:p.top,width:Math.max(0,p.width-p.left-p.right),height:Math.max(0,p.height-p.top-p.bottom),fill:'#fff',stroke:'#78927a','stroke-width':.5,'stroke-dasharray':'3 3'});
+ el('rect',{width:p.width,height:p.height,fill:'#e6e6e6',stroke:'#000','stroke-width':1});
+ el('rect',{x:p.left,y:p.top,width:Math.max(0,p.width-p.left-p.right),height:Math.max(0,p.height-p.top-p.bottom),fill:'#fff',stroke:'#000','stroke-width':.5,'stroke-dasharray':'3 3'});
  try{
    const previewLayout=B.layout($('corrected').value,p);
    $('calculatedSpacing').textContent=spacingInfo(previewLayout);
@@ -156,8 +156,8 @@ function render(){if(!result)return;B.validateColumns(result);debugRows=result.c
  const ns='http://www.w3.org/2000/svg';const svg=document.createElementNS(ns,'svg');svg.setAttribute('viewBox',`0 0 ${p.width} ${p.height}`);svg.setAttribute('aria-label',`타공 패턴 미리보기 ${previewPage+1}페이지`);
  const el=(tag,attrs)=>{const n=document.createElementNS(ns,tag);for(const [k,v]of Object.entries(attrs))n.setAttribute(k,v);svg.append(n);return n;};
  el('rect',{width:p.width,height:p.height,fill:'white'});
- if($('margins').checked){el('rect',{width:p.width,height:p.height,fill:'#e6eddf'});el('rect',{x:p.left,y:p.top,width:p.width-p.left-p.right,height:p.height-p.top-p.bottom,fill:'white',stroke:'#99ad92','stroke-width':.3,'stroke-dasharray':'2 2'});}
- if($('zero').checked)for(let i=0;i<bits.length;i++)if(bits[i]==='0'){const point=B.position(page,i);shapeElement(el,point,p,{stroke:'#d3d8d0',strokeWidth:.15});}
+ if($('margins').checked){el('rect',{width:p.width,height:p.height,fill:'#efefef'});el('rect',{x:p.left,y:p.top,width:p.width-p.left-p.right,height:p.height-p.top-p.bottom,fill:'white',stroke:'#000','stroke-width':.3,'stroke-dasharray':'2 2'});}
+ if($('zero').checked)for(let i=0;i<bits.length;i++)if(bits[i]==='0'){const point=B.position(page,i);shapeElement(el,point,p,{stroke:'#c4c4c4',strokeWidth:.15});}
  for(const h of holes)shapeElement(el,h,p);
  $('preview').replaceChildren(svg);
  $('pageNav').hidden=result.pageCount<=1;$('pageLabel').textContent=`${previewPage+1} / ${result.pageCount} 페이지`;$('pagePrev').disabled=previewPage===0;$('pageNext').disabled=previewPage>=result.pageCount-1;
