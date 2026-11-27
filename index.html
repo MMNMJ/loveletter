@@ -118,7 +118,8 @@ footer{margin:40px var(--pad) 0;padding:16px 0 28px;border-top:2px dashed #000;f
 <div class="row sub"><span>→</span><span>PERFORATION</span><span>→</span><span>SVG / PDF</span></div>
 </nav></header>
 <div class="intro">글 → 구멍<br><b>한국어 · 영어 • 레이저커팅 타공 패턴</b></div>
-<main><section class="input"><h2><em>01</em>Text<span>한국어 · 영어</span></h2><textarea id="source" spellcheck="false" aria-label="변환할 글" placeholder="여기에 글을 써 주세요. 한국어, 영어 모두 돼요."></textarea><div class="bar"><button id="correct">교정</button><button id="convert" class="primary">변환</button><button id="export" disabled>출력 · SVG / PDF</button><button id="example">예제</button></div><div id="status" role="status" aria-live="polite">글을 쓴 뒤 교정하거나 변환해 주세요.</div><h2><em>02</em>Corrected<span>교정된 언어</span></h2><textarea id="corrected" readonly aria-label="교정된 언어" placeholder="원문은 그대로 두고, 정리된 글을 여기에 보여줘요."></textarea><p class="note">겹친 공백, 빈 줄, 줄바꿈 방식만 정리하고 한글 자모가 분리된 글은 합쳐요(NFC). 맞춤법이나 번역은 하지 않아요. 영어만 있으면 7-bit ASCII, 한글이 섞이면 UTF-8(한 글자 = 8비트 × 3칸)로 바꿔요.</p><details><summary>비트열</summary><div id="bits">변환 후 표시됩니다.</div></details><details><summary>이 프로그램에 대하여</summary><p>〈민-바실 부숑〉은 한국어와 영어 문장을 비트로 바꾸고, 그 1을 레이저로 뚫을 구멍으로 옮기는 프로그램이다. 영어는 7-bit ASCII, 한글은 UTF-8 바이트를 그대로 쓴다. 이 프로그램은 IBM식 천공카드의 행정적 분류 체계보다, 바실 부숑의 직조 제어 장치에서 출발한 구멍-패턴-노동의 계보를 참조한다.</p><p>Min-Basile Bouchon turns Korean and English text into bits — 7-bit ASCII for English, UTF-8 bytes for Korean — and every 1 becomes a laser-cut hole.</p></details></section>
+<main><section class="input"><h2><em>01</em>Text<span>한국어 · 영어</span></h2><textarea id="source" spellcheck="false" aria-label="변환할 글" placeholder="여기에 글을 써 주세요. 한국어, 영어 모두 돼요."></textarea><div class="bar"><button id="correct">교정</button><button id="convert" class="primary">변환</button><button id="export" disabled>출력 · SVG / PDF</button><button id="example">예제</button></div><div id="status" role="status" aria-live="polite">글을 쓴 뒤 교정하거나 변환해 주세요.</div><h2><em>02</em>Corrected<span>교정된 언어</span></h2><textarea id="corrected" readonly aria-label="교정된 언어" placeholder="원문은 그대로 두고, 정리된 글을 여기에 보여줘요."></textarea><p class="note">겹친 공백, 빈 줄, 줄바꿈 방식만 정리하고 한글 자모가 분리된 글은 합쳐요(NFC). 맞춤법이나 번역은 하지 않아요. 영어만 있으면 7-bit ASCII, 한글이 섞이면 UTF-8(한 글자 = 8비트 × 3칸)로 바꿔요.</p><details><summary>비트열</summary><div id="bits">변환 후 표시됩니다.</div></details><details><summary>이 프로그램에 대하여</summary><p>당신의 곁에 오래도록 머물러 준 당신의 반려 로봇, 비인간 기계에게 보내는 편지. 기계들이 알아들을 수 있게 바꿔드려요.</p>
+<p lang="en">A letter to your companion robot, the non-human machine that has stayed by your side for so long. We’ll translate it into something machines can understand.</p></details></section>
 <section class="preview"><h2><em>03</em>Bit Table<span>칸별 비트</span></h2><p class="note">index는 세로열 한 칸의 번호(0부터)예요. 영어는 한 글자가 한 칸, 한글은 한 글자가 세 칸(UTF-8 3바이트)이에요. 공백·줄바꿈도 한 칸씩 차지해요. binary는 위 → 아래 순서예요.</p><div class="debug-scroll"><table><thead><tr><th>index</th><th>character</th><th>decimal</th><th>binary</th></tr></thead><tbody id="debugBody"></tbody></table></div><div class="bar"><button id="debugPrev" disabled>이전 100칸</button><span id="debugPage">교정 후 표시</span><button id="debugNext" disabled>다음 100칸</button></div><p id="columnCheck" role="status"></p><h2><em>04</em>Perforation<span>타공 패턴 미리보기</span></h2><p id="activeMode"><strong>현재 모드: Column Layout</strong></p><div class="view-menu" role="group" aria-label="미리보기 보기 설정"><b>VIEW <span>보기</span></b>
 <label class="toggle"><input type="checkbox" id="margins" checked><span>여백 가이드</span></label>
 <label class="toggle"><input type="checkbox" id="grid"><span>그리드</span></label>
@@ -131,20 +132,21 @@ footer{margin:40px var(--pad) 0;padding:16px 0 28px;border-top:2px dashed #000;f
 /* 위에서 3mm 동그라미가 떨어져 바닥에 쌓인다. 마우스를 빠르게 움직이면 흩어졌다가 사라지고, 다시 처음부터 떨어진다. */
 const cv=document.getElementById('rain'),ctx=cv.getContext('2d');
 if(matchMedia('(prefers-reduced-motion: reduce)').matches){cv.remove();return;}
-const MM=96/25.4,R=1.5*MM,D=R*2,G=1400,MAXFILL=.15;let W,H,dpr,balls=[],state='fall',fade=1,spawnT=0,mouse={x:-1e4,y:-1e4,vx:0,vy:0,t:0};
+const MM=96/25.4,R=1.5*MM,D=R*2,G=150,DRAG=1.9,MAXFILL=.15;let W,H,dpr,balls=[],state='fall',fade=1,spawnT=0,mouse={x:-1e4,y:-1e4,vx:0,vy:0,t:0};
 function size(){dpr=devicePixelRatio||1;W=innerWidth;H=innerHeight;cv.width=W*dpr;cv.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);}
 size();addEventListener('resize',()=>{size();for(const b of balls){b.x=Math.min(Math.max(b.x,R),W-R);b.y=Math.min(b.y,H-R);}});
 const maxBalls=()=>Math.floor(W/D*(H*MAXFILL)/(D*.87));
 addEventListener('pointermove',e=>{const now=performance.now(),dt=Math.max(8,now-mouse.t);mouse.vx=(e.clientX-mouse.x)/dt*16;mouse.vy=(e.clientY-mouse.y)/dt*16;if(now-mouse.t>200){mouse.vx=mouse.vy=0;}mouse.x=e.clientX;mouse.y=e.clientY;mouse.t=now;
  const sp=Math.hypot(mouse.vx,mouse.vy);
  if(state==='fall'&&sp>3)for(const b of balls){const dx=b.x-mouse.x,dy=b.y-mouse.y,d=Math.hypot(dx,dy);if(d<90){const f=(1-d/90)*sp*28;b.vx+=dx/(d||1)*f+mouse.vx*12;b.vy+=dy/(d||1)*f+mouse.vy*12-f*.5;}}
- if(state==='fall'&&sp>22&&balls.length>8){state='scatter';fade=1;for(const b of balls){const dx=b.x-mouse.x,dy=b.y-mouse.y,d=Math.hypot(dx,dy)||1,f=500+Math.random()*700;b.vx=dx/d*f+mouse.vx*25;b.vy=dy/d*f-300+mouse.vy*25;}}
+ if(state==='fall'&&sp>22&&balls.length>8){state='scatter';fade=1;for(const b of balls){const dx=b.x-mouse.x,dy=b.y-mouse.y,d=Math.hypot(dx,dy)||1,f=220+Math.random()*320;b.vx=dx/d*f+mouse.vx*12;b.vy=dy/d*f-160+mouse.vy*12;}}
 },{passive:true});
-function spawn(){balls.push({x:R+Math.random()*(W-D),y:-R-Math.random()*40,vx:(Math.random()-.5)*30,vy:Math.random()*80});}
+function spawn(){balls.push({x:R+Math.random()*(W-D),y:-R-Math.random()*40,vx:(Math.random()-.5)*10,vy:20+Math.random()*30,ph:Math.random()*6.28,sw:.6+Math.random()*.8});}
 function step(dt){
- if(state==='fall'){spawnT-=dt;if(spawnT<=0&&balls.length<maxBalls()){spawn();spawnT=.02+Math.random()*.08;}}
- for(const b of balls){b.vy+=G*dt;b.vx*=.995;b.x+=b.vx*dt;b.y+=b.vy*dt;}
- if(state==='scatter'){fade-=dt*1.1;if(fade<=0){balls=[];state='fall';fade=1;spawnT=.4;}return;}
+ if(state==='fall'){spawnT-=dt;if(spawnT<=0&&balls.length<maxBalls()){spawn();spawnT=.06+Math.random()*.16;}}
+ const t=performance.now()/1000;
+ for(const b of balls){if(state==='fall'){b.vy+=(G-b.vy*DRAG)*dt;b.vx+=(Math.sin(t*b.sw+b.ph)*10-b.vx*1.6)*dt;}else{b.vy+=G*2*dt;}b.x+=b.vx*dt;b.y+=b.vy*dt;}
+ if(state==='scatter'){fade-=dt*.7;if(fade<=0){balls=[];state='fall';fade=1;spawnT=.4;}return;}
  // 충돌: 격자 나누어 겹침 해소 (몇 번 반복)
  for(let it=0;it<3;it++){const grid=new Map();
   for(let i=0;i<balls.length;i++){const b=balls[i],k=((b.x/D)|0)+','+((b.y/D)|0);(grid.get(k)||grid.set(k,[]).get(k)).push(i);}
@@ -152,8 +154,8 @@ function step(dt){
    for(let gx=cx-1;gx<=cx+1;gx++)for(let gy=cy-1;gy<=cy+1;gy++){const cell=grid.get(gx+','+gy);if(!cell)continue;
     for(const j of cell){if(j<=i)continue;const b=balls[j],dx=b.x-a.x,dy=b.y-a.y,d2=dx*dx+dy*dy;if(d2>=D*D||d2===0)continue;
      const d=Math.sqrt(d2),o=(D-d)/2,nx=dx/d,ny=dy/d;a.x-=nx*o;a.y-=ny*o;b.x+=nx*o;b.y+=ny*o;
-     const rv=(b.vx-a.vx)*nx+(b.vy-a.vy)*ny;if(rv<0){const im=-rv*.6;a.vx-=nx*im;a.vy-=ny*im;b.vx+=nx*im;b.vy+=ny*im;}}}}
-  for(const b of balls){if(b.y>H-R){b.y=H-R;if(b.vy>0)b.vy*=-.2;b.vx*=.9;}if(b.x<R){b.x=R;b.vx=Math.abs(b.vx)*.4;}if(b.x>W-R){b.x=W-R;b.vx=-Math.abs(b.vx)*.4;}}}
+     const rv=(b.vx-a.vx)*nx+(b.vy-a.vy)*ny;if(rv<0){const im=-rv*.9;a.vx-=nx*im;a.vy-=ny*im;b.vx+=nx*im;b.vy+=ny*im;}}}}
+  for(const b of balls){if(b.y>H-R){b.y=H-R;if(b.vy>0)b.vy=0;b.vx*=.6;}if(b.x<R){b.x=R;b.vx=Math.abs(b.vx)*.4;}if(b.x>W-R){b.x=W-R;b.vx=-Math.abs(b.vx)*.4;}}}
 }
 let last=performance.now();
 function frame(now){const dt=Math.min(.033,(now-last)/1000);last=now;if(!document.hidden){step(dt);
