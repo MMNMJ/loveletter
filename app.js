@@ -229,3 +229,34 @@ function syncSeparatorControls(){
 $('saveSVG').addEventListener('change',()=>{syncSeparatorControls();renderExportPreview();});
 $('savePDF').addEventListener('change',renderExportPreview);
 $('separatorControls').addEventListener('input',()=>{syncSeparatorControls();renderExportPreview();});
+
+// 즐겨찾기: 판형 설정을 이름 붙여 이 브라우저(localStorage)에 저장. 변환 로직과 무관한 UI 기능.
+const FAV_KEY='loveletter.favorites.v1';
+function favRead(){try{const v=JSON.parse(localStorage.getItem(FAV_KEY)||'[]');return Array.isArray(v)?v.filter(x=>x&&typeof x.name==='string'&&x.params&&typeof x.params==='object'):[];}catch(_){return [];}}
+function favWrite(list){try{localStorage.setItem(FAV_KEY,JSON.stringify(list));return true;}catch(_){favStatus('이 브라우저에서는 저장할 수 없어요. 파일로 내보내기를 써 주세요.');return false;}}
+function favStatus(t){$('favStatus').textContent=t;}
+function favRender(selected){const list=favRead(),sel=$('favList');sel.replaceChildren();
+ if(!list.length){const o=document.createElement('option');o.value='';o.textContent='저장한 설정이 없어요';sel.append(o);}
+ for(const f of list){const o=document.createElement('option');o.value=f.name;const q=f.params;o.textContent=`${f.name} · ${q.width}×${q.height} · ${({circle:'●',diamond:'◆',triangle:'▲',heart:'♥',square:'■',custom:'SVG'})[q.shape]||q.shape}${q.verticalAlign==='center'?' · 가운데':''}`;sel.append(o);}
+ if(selected)sel.value=selected;$('favLoad').disabled=$('favDelete').disabled=!list.length;}
+function favApply(f){const form=$('settingsForm');
+ for(const k of Object.keys(B.defaults))if(k in f.params&&form.elements[k])form.elements[k].value=f.params[k];
+ if(f.customVector&&f.customVector.markup&&f.customVector.bbox){customVector=f.customVector;if(f.customSize)$('customVectorSize').value=f.customSize;$('customVectorAspect').checked=f.customAspect!==false;renderCustomVectorSample();}
+ $('settingError').textContent='';syncFields();syncPresets();syncCustomVectorControls();updateCustomVectorStatus();marginPreview();}
+$('favSave').onclick=()=>{const name=$('favName').value.trim();if(!name){favStatus('이름을 먼저 적어 주세요.');$('favName').focus();return;}
+ const fp=formParams(),entry={name,params:fp,savedAt:new Date().toISOString()};
+ if(fp.shape==='custom'&&customVector){entry.customVector={fileName:customVector.fileName,markup:customVector.markup,bbox:customVector.bbox,primitives:customVector.primitives,warnings:customVector.warnings};entry.customSize=$('customVectorSize').value;entry.customAspect=$('customVectorAspect').checked;}
+ const list=favRead(),i=list.findIndex(f=>f.name===name),existed=i>=0;if(existed)list[i]=entry;else list.push(entry);
+ if(favWrite(list)){favRender(name);$('favName').value='';favStatus(existed?`「${name}」을 지금 설정으로 덮어썼어요.`:`「${name}」 저장했어요.`);}};
+$('favLoad').onclick=()=>{const f=favRead().find(x=>x.name===$('favList').value);if(!f)return;favApply(f);favStatus(`「${f.name}」 불러왔어요. 적용 · 변환을 누르면 반영돼요.`);};
+$('favList').ondblclick=()=>$('favLoad').click();
+$('favDelete').onclick=()=>{const name=$('favList').value;if(!name)return;if(favWrite(favRead().filter(f=>f.name!==name))){favRender();favStatus(`「${name}」 지웠어요.`);}};
+$('favExport').onclick=()=>{const list=favRead();if(!list.length){favStatus('내보낼 즐겨찾기가 없어요.');return;}
+ const url=URL.createObjectURL(new Blob([JSON.stringify({app:'LOVE LETTER',version:1,favorites:list},null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='Love_Letter_favorites.json';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);favStatus(`${list.length}개를 파일로 내보냈어요.`);};
+$('favImportBtn').onclick=()=>$('favImport').click();
+$('favImport').addEventListener('change',async e=>{const file=e.target.files?.[0];e.target.value='';if(!file)return;
+ try{const data=JSON.parse(await file.text()),incoming=(Array.isArray(data)?data:data.favorites||[]).filter(x=>x&&typeof x.name==='string'&&x.params&&typeof x.params==='object');
+  if(!incoming.length)throw Error();const list=favRead();for(const f of incoming){const i=list.findIndex(x=>x.name===f.name);if(i>=0)list[i]=f;else list.push(f);}
+  if(favWrite(list)){favRender(incoming[0].name);favStatus(`${incoming.length}개 가져왔어요. 같은 이름은 덮어썼어요.`);}}
+ catch(_){favStatus('즐겨찾기 파일을 읽을 수 없어요. 여기서 내보낸 .json 파일인지 확인해 주세요.');}});
+favRender();
